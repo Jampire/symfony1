@@ -2,7 +2,9 @@
 
 namespace App\Controller;
 
-use App\Service\SearchService;
+use App\Entity\ScoreResult;
+use App\Service\ApiService;
+use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -10,11 +12,13 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 class ApiController extends AbstractController
 {
 
-    private SearchService $searchService;
+    private ApiService $apiService;
+    private $entityManager;
 
-    public function __construct(SearchService $searchService)
+    public function __construct(ApiService $apiService, ManagerRegistry $doctrine)
     {
-        $this->searchService = $searchService;
+        $this->apiService = $apiService;
+        $this->entityManager = $doctrine->getManager();
     }
 
     #[Route(path: '/score', name: 'score', methods: ['GET'])]
@@ -24,10 +28,25 @@ class ApiController extends AbstractController
         $term = $request->query->get('term');
 
         if (!empty($term)) {
-            $positive_results = $this->searchService->countSearchResults($term.'+rocks');
-            $negative_results = $this->searchService->countSearchResults($term.'+sucks');
-            $score = round(10 * $positive_results / ($positive_results + $negative_results), 2);
-            $data = ['term' => $term, 'score' => $score];
+            $currentDateTime = new \DateTime();
+            $scoreResultRepo = $this->entityManager->getRepository(ScoreResult::class);
+            $scoreResult = $scoreResultRepo->findOneBy(['word' => $term]);
+            if (empty($scoreResult)) {
+                $positive_results = $this->apiService->countSearchResults($term . ' rocks');
+                $negative_results = $this->apiService->countSearchResults($term . ' sucks');
+                $score = round(10 * $positive_results / ($positive_results + $negative_results), 2);
+
+                $scoreResult = new ScoreResult();
+                $scoreResult->setWord($term);
+                $scoreResult->setScore($score);
+                $scoreResult->setDate($currentDateTime);
+                $this->entityManager->persist($scoreResult);
+                $this->entityManager->flush();
+
+                $data = ['term' => $term, 'score' => $score];
+            } else {
+                $data = ['term' => $scoreResult->getWord(), 'score' => $scoreResult->getScore()];
+            }
         }
 
         return $this->json($data, headers: ['Content-Type' => 'application/json;charset=UTF-8']);
