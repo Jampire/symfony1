@@ -6,6 +6,7 @@ use App\Entity\ScoreResult;
 use App\Service\ApiService;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 
@@ -24,6 +25,10 @@ class ApiController extends AbstractController
     #[Route(path: '/score', name: 'score', methods: ['GET'])]
     public function score(Request $request)
     {
+        if ($request->headers->get('Authorization') != $this->getParameter('api_token')) {
+            return $this->json(['error' => 'Unauthorized'], Response::HTTP_UNAUTHORIZED);
+        }
+
         $data = ['term' => ''];
         $term = $request->query->get('term');
 
